@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "odf-decrypt"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "argon2-cffi>=25.1.0",
+    "cryptography>=46.0.3",
+    "pycryptodome>=3.23.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pre-commit>=4.3.0",
+    "black>=25.12.0",
+    "python-dotenv>=1.0.0",
+    "sharepoint-to-text==0.7.0"
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["odf_decrypt/tests"]
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
