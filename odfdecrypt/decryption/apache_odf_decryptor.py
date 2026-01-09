@@ -2,11 +2,19 @@ import io
 import logging
 import xml.etree.ElementTree as ET
 import zipfile
+from os import PathLike
 from typing import Any, Dict, List
 
 from cryptography.hazmat.primitives import hashes
 
-from odf_decrypt.base_odf_decryptor import BaseODFDecryptor
+from odfdecrypt.decryption.base_odf_decryptor import BaseODFDecryptor
+from odfdecrypt.exceptions import (
+    ChecksumError,
+    DecryptionError,
+    InvalidODFFileError,
+    ManifestParseError,
+    UnsupportedEncryptionError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +102,13 @@ class AOODecryptor(BaseODFDecryptor):
             return encryption_entries
 
         except Exception as e:
-            raise ValueError(f"Failed to parse manifest: {e}")
+            raise ManifestParseError(f"Failed to parse manifest: {e}")
 
     def _decrypt_file(
         self, zf: zipfile.ZipFile, entry: Dict[str, Any], password: str
     ) -> bytes:
         """Decrypt a single encrypted file."""
-        logger.info(f"Decrypting {entry['file_path']}...")
+        logger.debug(f"Decrypting {entry['file_path']}...")
 
         start_key = self.generate_start_key(
             password, entry["start_key_algorithm"], entry["start_key_size"]
@@ -123,17 +131,17 @@ class AOODecryptor(BaseODFDecryptor):
                 segment_size=self.BLOWFISH_SEGMENT_SIZE,
             )
         else:
-            raise ValueError(
+            raise UnsupportedEncryptionError(
                 f"Unsupported encryption algorithm: {entry['algorithm_name']}"
             )
 
         # Verify checksum if available
         if entry["checksum_type"] == "SHA1/1K" and entry["checksum"]:
             if not self.verify_sha1_checksum(decrypted_data, entry["checksum"]):
-                raise ValueError(
+                raise ChecksumError(
                     f"Checksum verification failed for {entry['file_path']}"
                 )
-            logger.info(f"Checksum verified for {entry['file_path']}")
+            logger.debug(f"Checksum verified for {entry['file_path']}")
 
         # Decompress
         try:
@@ -166,11 +174,54 @@ class AOODecryptor(BaseODFDecryptor):
 
         updated_manifest = ET.tostring(root, encoding="unicode", xml_declaration=True)
         out_zf.writestr("META-INF/manifest.xml", updated_manifest)
-        logger.info("Updated manifest.xml - removed encryption metadata")
+        logger.debug("Updated manifest.xml - removed encryption metadata")
 
-    def decrypt(self, odf_path: str, password: str) -> io.BytesIO:
+    def _decrypt(self, zf: zipfile.ZipFile, password: str) -> io.BytesIO:
         """
-        Decrypt an ODF file using the provided password.
+        Core decryption logic that works with an open ZipFile.
+
+        Args:
+            zf: Open ZipFile object containing the encrypted ODF
+            password: Password to decrypt the file
+
+        Returns:
+            Decrypted ODF ZIP archive as io.BytesIO object
+        """
+        manifest_content = self._read_manifest(zf)
+        encryption_entries = self.parse_manifest(manifest_content)
+
+        if not encryption_entries:
+            raise InvalidODFFileError("No encrypted files found in manifest")
+
+        logger.debug(f"Found {len(encryption_entries)} encrypted files")
+
+        decrypted_buffer = io.BytesIO()
+        encrypted_paths = {e["file_path"] for e in encryption_entries}
+
+        with zipfile.ZipFile(decrypted_buffer, "w", zipfile.ZIP_DEFLATED) as out_zf:
+            # Copy non-encrypted files (except manifest)
+            for file_info in zf.infolist():
+                if file_info.filename not in encrypted_paths:
+                    if (
+                        not file_info.filename.endswith("/")
+                        and file_info.filename != "META-INF/manifest.xml"
+                    ):
+                        out_zf.writestr(file_info.filename, zf.read(file_info.filename))
+
+            # Decrypt encrypted files
+            for entry in encryption_entries:
+                decrypted_data = self._decrypt_file(zf, entry, password)
+                out_zf.writestr(entry["file_path"], decrypted_data)
+
+            # Update manifest
+            self._update_manifest(out_zf, encryption_entries, manifest_content)
+
+        decrypted_buffer.seek(0)
+        return decrypted_buffer
+
+    def decrypt_from_file(self, odf_path: str, password: str) -> io.BytesIO:
+        """
+        Decrypt an ODF file from disk.
 
         Args:
             odf_path: Path to the encrypted ODF file
@@ -180,58 +231,71 @@ class AOODecryptor(BaseODFDecryptor):
             Decrypted ODF ZIP archive as io.BytesIO object
 
         Raises:
-            ValueError: If decryption fails
+            ODFDecryptError: If decryption fails
         """
         try:
             with zipfile.ZipFile(odf_path, "r") as zf:
-                manifest_content = self._read_manifest(zf)
-                encryption_entries = self.parse_manifest(manifest_content)
-
-                if not encryption_entries:
-                    raise ValueError("No encrypted files found in manifest")
-
-                logger.info(f"Found {len(encryption_entries)} encrypted files")
-
-                decrypted_buffer = io.BytesIO()
-                encrypted_paths = {e["file_path"] for e in encryption_entries}
-
-                with zipfile.ZipFile(
-                    decrypted_buffer, "w", zipfile.ZIP_DEFLATED
-                ) as out_zf:
-                    # Copy non-encrypted files (except manifest)
-                    for file_info in zf.infolist():
-                        if file_info.filename not in encrypted_paths:
-                            if (
-                                not file_info.filename.endswith("/")
-                                and file_info.filename != "META-INF/manifest.xml"
-                            ):
-                                out_zf.writestr(
-                                    file_info.filename, zf.read(file_info.filename)
-                                )
-
-                    # Decrypt encrypted files
-                    for entry in encryption_entries:
-                        decrypted_data = self._decrypt_file(zf, entry, password)
-                        out_zf.writestr(entry["file_path"], decrypted_data)
-
-                    # Update manifest
-                    self._update_manifest(out_zf, encryption_entries, manifest_content)
-
-                decrypted_buffer.seek(0)
-                return decrypted_buffer
-
+                return self._decrypt(zf, password)
         except zipfile.BadZipFile:
-            raise ValueError("Invalid ODF file (not a valid ZIP archive)")
+            raise InvalidODFFileError("Invalid ODF file (not a valid ZIP archive)")
         except KeyError as e:
-            raise ValueError(f"Missing required file in ODF archive: {e}")
+            raise InvalidODFFileError(f"Missing required file in ODF archive: {e}")
+        except (
+            InvalidODFFileError,
+            ManifestParseError,
+            UnsupportedEncryptionError,
+            DecryptionError,
+        ):
+            raise
         except Exception as e:
-            raise ValueError(f"Decryption failed: {e}")
+            raise DecryptionError(f"Decryption failed: {e}")
 
-    # Backward compatibility aliases
-    def decrypt_odf_file(self, odf_path: str, password: str) -> bytes:
-        """Decrypt an ODF file and return as bytes."""
-        return self.decrypt(odf_path, password).getvalue()
+    def decrypt_from_bytes(self, odf: io.BytesIO, password: str) -> io.BytesIO:
+        """
+        Decrypt an ODF file from a BytesIO object.
 
-    def decrypt_odf_file_to_bytesio(self, odf_path: str, password: str) -> io.BytesIO:
-        """Decrypt an ODF file and return as io.BytesIO object."""
-        return self.decrypt(odf_path, password)
+        Args:
+            odf: BytesIO object containing the encrypted ODF
+            password: Password to decrypt the file
+
+        Returns:
+            Decrypted ODF ZIP archive as io.BytesIO object
+
+        Raises:
+            ODFDecryptError: If decryption fails
+        """
+        try:
+            with zipfile.ZipFile(odf, "r") as zf:
+                return self._decrypt(zf, password)
+        except zipfile.BadZipFile:
+            raise InvalidODFFileError("Invalid ODF file (not a valid ZIP archive)")
+        except KeyError as e:
+            raise InvalidODFFileError(f"Missing required file in ODF archive: {e}")
+        except (
+            InvalidODFFileError,
+            ManifestParseError,
+            UnsupportedEncryptionError,
+            DecryptionError,
+        ):
+            raise
+        except Exception as e:
+            raise DecryptionError(f"Decryption failed: {e}")
+
+    def decrypt(self, odf: str | PathLike | io.BytesIO, password: str) -> io.BytesIO:
+        """
+        Decrypt an ODF file using the provided password.
+
+        Args:
+            odf: Path to the encrypted ODF file or BytesIO object
+            password: Password to decrypt the file
+
+        Returns:
+            Decrypted ODF ZIP archive as io.BytesIO object
+
+        Raises:
+            ValueError: If decryption fails
+        """
+        if isinstance(odf, io.BytesIO):
+            return self.decrypt_from_bytes(odf, password)
+        else:
+            return self.decrypt_from_file(odf, password)

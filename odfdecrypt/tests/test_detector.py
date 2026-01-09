@@ -2,7 +2,7 @@ import logging
 import tempfile
 import unittest
 
-from odf_decrypt.odf_origin_detector import ODFOriginDetector, OpenOfficeOrigin
+from odfdecrypt.odf_origin_detector import ODFOriginDetector, OpenOfficeOrigin
 
 logger = logging.getLogger(__name__)
 
@@ -13,23 +13,23 @@ def test_apache_office_detector():
     detector = ODFOriginDetector()
 
     origin = detector.detect_origin(
-        "odf_decrypt/tests/resources/password_protected/aoo_document_pw_hello.odt"
+        "odfdecrypt/tests/resources/password_protected/aoo_document_pw_hello.odt"
     )
     tc.assertEqual(OpenOfficeOrigin.APACHE_OPEN_OFFICE, origin)
 
-    origin = detector.detect_origin("odf_decrypt/tests/resources/plain/aoo_drawing.odg")
+    origin = detector.detect_origin("odfdecrypt/tests/resources/plain/aoo_drawing.odg")
     tc.assertEqual(OpenOfficeOrigin.APACHE_OPEN_OFFICE, origin)
 
-    origin = detector.detect_origin("odf_decrypt/tests/resources/plain/aoo_formula.odf")
+    origin = detector.detect_origin("odfdecrypt/tests/resources/plain/aoo_formula.odf")
     tc.assertEqual(OpenOfficeOrigin.APACHE_OPEN_OFFICE, origin)
 
     origin = detector.detect_origin(
-        "odf_decrypt/tests/resources/plain/aoo_presentation.odp"
+        "odfdecrypt/tests/resources/plain/aoo_presentation.odp"
     )
     tc.assertEqual(OpenOfficeOrigin.APACHE_OPEN_OFFICE, origin)
 
     origin = detector.detect_origin(
-        "odf_decrypt/tests/resources/plain/aoo_spreadsheet.ods"
+        "odfdecrypt/tests/resources/plain/aoo_spreadsheet.ods"
     )
     tc.assertEqual(OpenOfficeOrigin.APACHE_OPEN_OFFICE, origin)
 
@@ -38,22 +38,22 @@ def test_libre_office_detector():
     detector = ODFOriginDetector()
 
     origin = detector.detect_origin(
-        "odf_decrypt/tests/resources/password_protected/libreoffice_sample_pw_hello.odt"
+        "odfdecrypt/tests/resources/password_protected/libre_office_sample_pw_hello.odt"
     )
     tc.assertEqual(OpenOfficeOrigin.LIBREOFFICE, origin)
 
     origin = detector.detect_origin(
-        "odf_decrypt/tests/resources/plain/libre_office_presentation.odp"
+        "odfdecrypt/tests/resources/plain/libre_office_presentation.odp"
     )
     tc.assertEqual(OpenOfficeOrigin.LIBREOFFICE, origin)
 
     origin = detector.detect_origin(
-        "odf_decrypt/tests/resources/plain/libre_office_spreadsheet.ods"
+        "odfdecrypt/tests/resources/plain/libre_office_spreadsheet.ods"
     )
     tc.assertEqual(OpenOfficeOrigin.LIBREOFFICE, origin)
 
     origin = detector.detect_origin(
-        "odf_decrypt/tests/resources/plain/libre_office_draw.odg"
+        "odfdecrypt/tests/resources/plain/libre_office_draw.odg"
     )
     tc.assertEqual(OpenOfficeOrigin.LIBREOFFICE, origin)
 

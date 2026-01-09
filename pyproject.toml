@@ -3,16 +3,58 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "odf-decrypt"
-version = "0.1.0"
-description = "Add your description here"
+name = "odfdecrypt"
+version = "0.1.0rc1"
+description = "Decrypt password-protected OpenDocument Format (ODF) files from LibreOffice and Apache OpenOffice"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.10"
+authors = [
+    { name = "odfdecrypt contributors" }
+]
+maintainers = [
+    { name = "odfdecrypt contributors" }
+]
+keywords = [
+    "odf",
+    "opendocument",
+    "libreoffice",
+    "openoffice",
+    "decrypt",
+    "encryption",
+    "odt",
+    "ods",
+    "odp",
+    "password",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
     "argon2-cffi>=25.1.0",
-    "cryptography>=46.0.3",
-    "pycryptodome>=3.23.0",
+    "cryptography>=44.0.0",
+    "pycryptodome>=3.21.0",
 ]
+
+[project.scripts]
+odfdecrypt = "odfdecrypt.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/toobee/odf-decrypt"
+Repository = "https://github.com/toobee/odf-decrypt"
+Issues = "https://github.com/toobee/odf-decrypt/issues"
 
 [dependency-groups]
 dev = [
@@ -20,15 +62,19 @@ dev = [
     "pre-commit>=4.3.0",
     "black>=25.12.0",
     "python-dotenv>=1.0.0",
-    "sharepoint-to-text==0.7.0"
+    "sharepoint-to-text==0.8.1",
+    "pycln>=2.6.0",
+    "isort>=7.0.0",
+    "flake8>=7.3.0",
+    "PyYAML>=6.0.0"
 ]
 
 [tool.black]
 line-length = 88
-target-version = ["py310", "py311", "py312"]
+target-version = ["py310", "py311", "py312", "py313", "py314"]
 
 [tool.pytest.ini_options]
-testpaths = ["odf_decrypt/tests"]
+testpaths = ["odfdecrypt/tests"]
 log_cli = true
 log_cli_level = "INFO"
 log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"

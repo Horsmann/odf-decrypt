@@ -4,12 +4,15 @@ import logging
 import xml.etree.ElementTree as ET
 import zipfile
 import zlib
+from abc import abstractmethod
 from typing import Optional
 
 from Crypto.Cipher import Blowfish as CryptoBlowfish
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+from odfdecrypt.exceptions import DecompressionError, UnsupportedEncryptionError
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +74,9 @@ class BaseODFDecryptor:
             digest.update(password_bytes)
             return digest.finalize()[:key_size]
         else:
-            raise ValueError(f"Unsupported start key algorithm: {algorithm}")
+            raise UnsupportedEncryptionError(
+                f"Unsupported start key algorithm: {algorithm}"
+            )
 
     def derive_key_pbkdf2(
         self, password: bytes, salt: bytes, iterations: int, key_size: int
@@ -102,7 +107,9 @@ class BaseODFDecryptor:
             Decrypted data
         """
         if len(iv) != 8:
-            raise ValueError(f"Blowfish-CFB requires 8-byte IV, got {len(iv)}")
+            raise UnsupportedEncryptionError(
+                f"Blowfish-CFB requires 8-byte IV, got {len(iv)}"
+            )
 
         cipher = CryptoBlowfish.new(
             key, CryptoBlowfish.MODE_CFB, iv, segment_size=segment_size
@@ -114,7 +121,7 @@ class BaseODFDecryptor:
         try:
             return zlib.decompress(compressed_data, -zlib.MAX_WBITS)
         except Exception as e:
-            raise ValueError(f"Raw deflate decompression failed: {e}")
+            raise DecompressionError(f"Raw deflate decompression failed: {e}")
 
     def _get_manifest_attr(self, element: ET.Element, attr_name: str) -> Optional[str]:
         """Get attribute value from manifest element with proper namespace."""
@@ -147,18 +154,8 @@ class BaseODFDecryptor:
         """Read and return manifest.xml content from ZIP file."""
         return zf.read("META-INF/manifest.xml").decode("utf-8")
 
-    def decrypt(self, odf_path: str, password: str) -> io.BytesIO:
-        """
-        Decrypt an ODF file using the provided password.
+    @abstractmethod
+    def decrypt_from_bytes(self, odf: io.BytesIO, password: str) -> io.BytesIO: ...
 
-        Args:
-            odf_path: Path to the encrypted ODF file
-            password: Password to decrypt the file
-
-        Returns:
-            Decrypted ODF ZIP archive as io.BytesIO object
-
-        Raises:
-            ValueError: If decryption fails
-        """
-        raise NotImplementedError("Subclasses must implement decrypt()")
+    @abstractmethod
+    def decrypt_from_file(self, odf_path: str, password: str) -> io.BytesIO: ...

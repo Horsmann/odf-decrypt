@@ -4,13 +4,20 @@ import os
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
+from os import PathLike
 from typing import Any, Dict, List, Tuple
 
 import argon2
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from odf_decrypt.base_odf_decryptor import BaseODFDecryptor
+from odfdecrypt.decryption.base_odf_decryptor import BaseODFDecryptor
+from odfdecrypt.exceptions import (
+    DecryptionError,
+    InvalidODFFileError,
+    ManifestParseError,
+    UnsupportedEncryptionError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +58,18 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
                 type=argon2.low_level.Type.ID,
             )
         except Exception as e:
-            raise ValueError(f"Argon2id key derivation failed: {e}")
+            raise DecryptionError(f"Argon2id key derivation failed: {e}")
 
     def decrypt_aes256_gcm(self, data: bytes, key: bytes, iv: bytes) -> bytes:
         """Decrypt using AES-256-GCM."""
         if len(key) != 32:
-            raise ValueError(f"AES-256 requires 32-byte key, got {len(key)}")
+            raise UnsupportedEncryptionError(
+                f"AES-256 requires 32-byte key, got {len(key)}"
+            )
         if len(iv) != 12:
-            raise ValueError(f"AES-GCM requires 12-byte IV, got {len(iv)}")
+            raise UnsupportedEncryptionError(
+                f"AES-GCM requires 12-byte IV, got {len(iv)}"
+            )
 
         # Check for prepended IV (LibreOffice format)
         if len(data) > 12 and data[:12] == iv:
@@ -67,7 +78,7 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
             encrypted_data = data
 
         if len(encrypted_data) < 16:
-            raise ValueError("Encrypted data too short to contain GCM tag")
+            raise DecryptionError("Encrypted data too short to contain GCM tag")
 
         actual_ciphertext = encrypted_data[:-16]
         tag = encrypted_data[-16:]
@@ -78,9 +89,13 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
     def decrypt_aes256_cbc(self, ciphertext: bytes, key: bytes, iv: bytes) -> bytes:
         """Decrypt using AES-256-CBC."""
         if len(key) != 32:
-            raise ValueError(f"AES-256 requires 32-byte key, got {len(key)}")
+            raise UnsupportedEncryptionError(
+                f"AES-256 requires 32-byte key, got {len(key)}"
+            )
         if len(iv) != 16:
-            raise ValueError(f"AES-CBC requires 16-byte IV, got {len(iv)}")
+            raise UnsupportedEncryptionError(
+                f"AES-CBC requires 16-byte IV, got {len(iv)}"
+            )
 
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=self.backend)
         decryptor = cipher.decryptor()
@@ -89,7 +104,7 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         # Remove PKCS7 padding
         padding_length = plaintext[-1]
         if padding_length > 16 or padding_length == 0:
-            raise ValueError("Invalid PKCS7 padding")
+            raise DecryptionError("Invalid PKCS7 padding")
         return plaintext[:-padding_length]
 
     def _derive_encryption_key(self, start_key: bytes, params: Dict[str, Any]) -> bytes:
@@ -113,7 +128,9 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
                 params["derived_key_size"],
             )
         else:
-            raise ValueError(f"Unsupported key derivation function: {kdf_name}")
+            raise UnsupportedEncryptionError(
+                f"Unsupported key derivation function: {kdf_name}"
+            )
 
     def _decrypt_data(
         self, encrypted_data: bytes, key: bytes, params: Dict[str, Any]
@@ -129,7 +146,9 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         elif self._is_blowfish_cfb(algo):
             return self.decrypt_blowfish_cfb(encrypted_data, key, iv, segment_size=8)
         else:
-            raise ValueError(f"Unsupported encryption algorithm: {algo}")
+            raise UnsupportedEncryptionError(
+                f"Unsupported encryption algorithm: {algo}"
+            )
 
     def _parse_encryption_entry(
         self, entry: ET.Element, is_modern: bool
@@ -137,7 +156,7 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         """Parse encryption parameters from a file entry element."""
         encryption_data = self._find_manifest_element(entry, "encryption-data")
         if encryption_data is None:
-            raise ValueError("No encryption-data found")
+            raise ManifestParseError("No encryption-data found")
 
         algorithm = self._find_manifest_element(encryption_data, "algorithm")
         start_key_gen = self._find_manifest_element(
@@ -146,7 +165,7 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         key_derivation = self._find_manifest_element(encryption_data, "key-derivation")
 
         if algorithm is None or start_key_gen is None or key_derivation is None:
-            raise ValueError("Missing required encryption parameters")
+            raise ManifestParseError("Missing required encryption parameters")
 
         # Default key sizes differ between modern and legacy formats
         default_start_key_size = 32 if is_modern else 20
@@ -228,13 +247,13 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
 
         except Exception as e:
             logger.debug(f"Exception in parse_manifest: {e}", exc_info=True)
-            raise ValueError(f"Failed to parse manifest: {e}")
+            raise ManifestParseError(f"Failed to parse manifest: {e}")
 
     def _decrypt_modern_format(
         self, zf: zipfile.ZipFile, params: Dict[str, Any], password: str
     ) -> bytes:
         """Decrypt modern format (single encrypted-package file)."""
-        logger.info("Modern format detected - single encrypted package")
+        logger.debug("Modern format detected - single encrypted package")
 
         encrypted_data = zf.read("encrypted-package")
         logger.debug(f"Encrypted package size: {len(encrypted_data)} bytes")
@@ -266,7 +285,7 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         password: str,
     ) -> bytes:
         """Decrypt legacy format (individual encrypted files)."""
-        logger.info(
+        logger.debug(
             f"Legacy format detected - {len(encryption_entries)} encrypted files"
         )
 
@@ -284,7 +303,7 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
 
                 # Decrypt each encrypted file
                 for entry in encryption_entries:
-                    logger.info(f"Decrypting {entry['file_path']}...")
+                    logger.debug(f"Decrypting {entry['file_path']}...")
                     start_key = self.generate_start_key(
                         password,
                         entry["start_key_algorithm"],
@@ -303,9 +322,31 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
 
         return plaintext
 
-    def decrypt(self, odf_path: str, password: str) -> io.BytesIO:
+    def _decrypt(self, zf: zipfile.ZipFile, password: str) -> io.BytesIO:
         """
-        Decrypt an ODF file using the provided password.
+        Core decryption logic that works with an open ZipFile.
+
+        Args:
+            zf: Open ZipFile object containing the encrypted ODF
+            password: Password to decrypt the file
+
+        Returns:
+            Decrypted ODF ZIP archive as io.BytesIO object
+        """
+        manifest_content = self._read_manifest(zf)
+        encryption_format, encryption_entries = self.parse_manifest(manifest_content)
+        logger.debug(f"Detected {encryption_format} encryption format")
+
+        if encryption_format == "modern":
+            plaintext = self._decrypt_modern_format(zf, encryption_entries[0], password)
+        else:
+            plaintext = self._decrypt_legacy_format(zf, encryption_entries, password)
+
+        return io.BytesIO(plaintext)
+
+    def decrypt_from_file(self, odf_path: PathLike, password: str) -> io.BytesIO:
+        """
+        Decrypt an ODF file from disk.
 
         Args:
             odf_path: Path to the encrypted ODF file
@@ -315,30 +356,71 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
             Decrypted ODF ZIP archive as io.BytesIO object
 
         Raises:
-            ValueError: If decryption fails
+            ODFDecryptError: If decryption fails
         """
         try:
             with zipfile.ZipFile(odf_path, "r") as zf:
-                manifest_content = self._read_manifest(zf)
-                encryption_format, encryption_entries = self.parse_manifest(
-                    manifest_content
-                )
-                logger.info(f"Detected {encryption_format} encryption format")
-
-                if encryption_format == "modern":
-                    plaintext = self._decrypt_modern_format(
-                        zf, encryption_entries[0], password
-                    )
-                else:
-                    plaintext = self._decrypt_legacy_format(
-                        zf, encryption_entries, password
-                    )
-
-                return io.BytesIO(plaintext)
-
+                return self._decrypt(zf, password)
         except zipfile.BadZipFile:
-            raise ValueError("Invalid ODF file (not a valid ZIP archive)")
+            raise InvalidODFFileError("Invalid ODF file (not a valid ZIP archive)")
         except KeyError as e:
-            raise ValueError(f"Missing required file in ODF archive: {e}")
+            raise InvalidODFFileError(f"Missing required file in ODF archive: {e}")
+        except (
+            InvalidODFFileError,
+            ManifestParseError,
+            UnsupportedEncryptionError,
+            DecryptionError,
+        ):
+            raise
         except Exception as e:
-            raise ValueError(f"Decryption failed: {e}")
+            raise DecryptionError(f"Decryption failed: {e}")
+
+    def decrypt_from_bytes(self, odf: io.BytesIO, password: str) -> io.BytesIO:
+        """
+        Decrypt an ODF file from a BytesIO object.
+
+        Args:
+            odf: BytesIO object containing the encrypted ODF
+            password: Password to decrypt the file
+
+        Returns:
+            Decrypted ODF ZIP archive as io.BytesIO object
+
+        Raises:
+            ODFDecryptError: If decryption fails
+        """
+        try:
+            with zipfile.ZipFile(odf, "r") as zf:
+                return self._decrypt(zf, password)
+        except zipfile.BadZipFile:
+            raise InvalidODFFileError("Invalid ODF file (not a valid ZIP archive)")
+        except KeyError as e:
+            raise InvalidODFFileError(f"Missing required file in ODF archive: {e}")
+        except (
+            InvalidODFFileError,
+            ManifestParseError,
+            UnsupportedEncryptionError,
+            DecryptionError,
+        ):
+            raise
+        except Exception as e:
+            raise DecryptionError(f"Decryption failed: {e}")
+
+    def decrypt(self, odf: str | PathLike | io.BytesIO, password: str) -> io.BytesIO:
+        """
+        Decrypt an ODF file using the provided password.
+
+        Args:
+            odf: Path to the encrypted ODF file or BytesIO object
+            password: Password to decrypt the file
+
+        Returns:
+            Decrypted ODF ZIP archive as io.BytesIO object
+
+        Raises:
+            ODFDecryptError: If decryption fails
+        """
+        if isinstance(odf, io.BytesIO):
+            return self.decrypt_from_bytes(odf, password)
+        else:
+            return self.decrypt_from_file(odf, password)
