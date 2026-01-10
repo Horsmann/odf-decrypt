@@ -1,10 +1,18 @@
 name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      publish_testpypi:
+        description: "Publish built distributions to TestPyPI"
+        type: boolean
+        default: false
+      publish_pypi:
+        description: "Publish built distributions to PyPI (requires manual approval)"
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -62,6 +70,8 @@ jobs:
     name: Publish to TestPyPI
     needs: [build, test]
     runs-on: ubuntu-latest
+    # Only run on release publication or manual dispatch with explicit TestPyPI flag
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_testpypi == 'true')
     environment:
       name: testpypi
       url: https://test.pypi.org/p/odfdecrypt
@@ -82,8 +92,10 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [publish-testpypi]
+    needs: [build, test]
     runs-on: ubuntu-latest
+    # Only run on release publication or manual dispatch with explicit PyPI flag
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_pypi == 'true')
     environment:
       name: pypi
       url: https://pypi.org/p/odfdecrypt
