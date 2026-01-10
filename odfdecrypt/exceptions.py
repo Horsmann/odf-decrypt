@@ -1,6 +1,12 @@
 """
-Custom exceptions for odf-decrypt.
+Custom exceptions and warnings for odf-decrypt.
 """
+
+
+class NotEncryptedWarning(UserWarning):
+    """Warning issued when attempting to decrypt a file that is not encrypted."""
+
+    pass
 
 
 class ODFDecryptError(Exception):

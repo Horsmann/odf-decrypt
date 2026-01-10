@@ -19,6 +19,7 @@ from odfdecrypt.exceptions import (
     IncorrectPasswordError,
     InvalidODFFileError,
     ManifestParseError,
+    NotEncryptedWarning,
     ODFDecryptError,
     UnsupportedEncryptionError,
 )
@@ -46,6 +47,8 @@ __all__ = [
     "IncorrectPasswordError",
     "ChecksumError",
     "DecompressionError",
+    # Warnings
+    "NotEncryptedWarning",
     # Version
     "__version__",
 ]

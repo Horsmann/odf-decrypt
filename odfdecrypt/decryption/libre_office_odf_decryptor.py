@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import tempfile
+import warnings
 import xml.etree.ElementTree as ET
 import zipfile
 from os import PathLike
@@ -18,6 +19,7 @@ from odfdecrypt.exceptions import (
     IncorrectPasswordError,
     InvalidODFFileError,
     ManifestParseError,
+    NotEncryptedWarning,
     UnsupportedEncryptionError,
 )
 
@@ -341,6 +343,22 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         manifest_content = self._read_manifest(zf)
         encryption_format, encryption_entries = self.parse_manifest(manifest_content)
         logger.debug(f"Detected {encryption_format} encryption format")
+
+        # Check if file is not encrypted (legacy format with no encrypted files)
+        if encryption_format == "legacy" and not encryption_entries:
+            warnings.warn(
+                "File is not encrypted, returning original content",
+                NotEncryptedWarning,
+                stacklevel=4,
+            )
+            # Return the original file content as-is
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as out_zf:
+                for file_info in zf.infolist():
+                    if not file_info.filename.endswith("/"):
+                        out_zf.writestr(file_info.filename, zf.read(file_info.filename))
+            buffer.seek(0)
+            return buffer
 
         if encryption_format == "modern":
             plaintext = self._decrypt_modern_format(zf, encryption_entries[0], password)

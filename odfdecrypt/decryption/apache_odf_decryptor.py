@@ -1,5 +1,6 @@
 import io
 import logging
+import warnings
 import xml.etree.ElementTree as ET
 import zipfile
 from os import PathLike
@@ -13,6 +14,7 @@ from odfdecrypt.exceptions import (
     IncorrectPasswordError,
     InvalidODFFileError,
     ManifestParseError,
+    NotEncryptedWarning,
     UnsupportedEncryptionError,
 )
 
@@ -191,7 +193,19 @@ class AOODecryptor(BaseODFDecryptor):
         encryption_entries = self.parse_manifest(manifest_content)
 
         if not encryption_entries:
-            raise InvalidODFFileError("No encrypted files found in manifest")
+            warnings.warn(
+                "File is not encrypted, returning original content",
+                NotEncryptedWarning,
+                stacklevel=4,
+            )
+            # Return the original file content as-is
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as out_zf:
+                for file_info in zf.infolist():
+                    if not file_info.filename.endswith("/"):
+                        out_zf.writestr(file_info.filename, zf.read(file_info.filename))
+            buffer.seek(0)
+            return buffer
 
         logger.debug(f"Found {len(encryption_entries)} encrypted files")
 
