@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "odfdecrypt"
-version = "0.1.0rc12"
+version = "0.1.0"
 description = "Decrypt password-protected OpenDocument Format (ODF) files from LibreOffice and Apache OpenOffice"
 readme = "README.md"
 license = "Apache-2.0"
