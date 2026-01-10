@@ -10,6 +10,7 @@ import zipfile
 
 from odfdecrypt.decryption.apache_odf_decryptor import AOODecryptor
 from odfdecrypt.decryption.libre_office_odf_decryptor import LibreOfficeDecryptor
+from odfdecrypt.exceptions import IncorrectPasswordError
 from odfdecrypt.odf_origin_detector import ODFOriginDetector, OpenOfficeOrigin
 
 
@@ -89,6 +90,8 @@ def decrypt_file(file_path: str, password: str, output_path: str) -> bool:
                 with open(output_path, "wb") as f:
                     f.write(decrypted.read())
                 return True
+            except IncorrectPasswordError:
+                raise
             except Exception:
                 decryptor = AOODecryptor()
 
@@ -97,6 +100,8 @@ def decrypt_file(file_path: str, password: str, output_path: str) -> bool:
             f.write(decrypted.read())
         return True
 
+    except IncorrectPasswordError:
+        raise
     except Exception as e:
         print(f"Error decrypting file: {e}", file=sys.stderr)
         return False
@@ -166,9 +171,17 @@ def main(args: list[str] | None = None) -> int:
     if decrypt_file(file_path, password, output_path):
         print(f"Successfully decrypted to: {output_path}")
         return 0
-    else:
+    return 1
+
+
+def cli(args: list[str] | None = None) -> int:
+    """Console script entrypoint that avoids stack traces for common errors."""
+    try:
+        return main(args)
+    except IncorrectPasswordError as e:
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli())

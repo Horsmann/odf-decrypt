@@ -10,6 +10,7 @@ from odfdecrypt.cli import (
     is_encrypted,
     main,
 )
+from odfdecrypt.exceptions import IncorrectPasswordError
 
 tc = unittest.TestCase()
 
@@ -216,24 +217,24 @@ class TestMainCLI:
         """Test that wrong password causes decryption failure."""
         test_file = os.path.join(
             os.path.dirname(__file__),
-            "resources/password_protected/libreoffice_sample_pw_hello.odt",
+            "resources/password_protected/libre_office_sample_pw_hello.odt",
         )
 
         with tempfile.NamedTemporaryFile(suffix=".odt", delete=False) as f:
             output_path = f.name
 
         try:
-            result = main(
-                [
-                    "--file",
-                    test_file,
-                    "--password",
-                    "wrong_password",
-                    "--output",
-                    output_path,
-                ]
-            )
-            tc.assertEqual(result, 1)
+            with tc.assertRaises(IncorrectPasswordError):
+                main(
+                    [
+                        "--file",
+                        test_file,
+                        "--password",
+                        "wrong_password",
+                        "--output",
+                        output_path,
+                    ]
+                )
         finally:
             if os.path.exists(output_path):
                 os.unlink(output_path)

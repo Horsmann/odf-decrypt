@@ -33,6 +33,12 @@ class DecryptionError(ODFDecryptError):
     pass
 
 
+class IncorrectPasswordError(DecryptionError):
+    """Raised when the provided password is incorrect."""
+
+    pass
+
+
 class ChecksumError(DecryptionError):
     """Raised when checksum verification fails after decryption."""
 

@@ -8,12 +8,14 @@ from os import PathLike
 from typing import Any, Dict, List, Tuple
 
 import argon2
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from odfdecrypt.decryption.base_odf_decryptor import BaseODFDecryptor
 from odfdecrypt.exceptions import (
     DecryptionError,
+    IncorrectPasswordError,
     InvalidODFFileError,
     ManifestParseError,
     UnsupportedEncryptionError,
@@ -84,7 +86,10 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         tag = encrypted_data[-16:]
 
         aesgcm = AESGCM(key)
-        return aesgcm.decrypt(iv, actual_ciphertext + tag, None)
+        try:
+            return aesgcm.decrypt(iv, actual_ciphertext + tag, None)
+        except InvalidTag as e:
+            raise IncorrectPasswordError("Incorrect password") from e
 
     def decrypt_aes256_cbc(self, ciphertext: bytes, key: bytes, iv: bytes) -> bytes:
         """Decrypt using AES-256-CBC."""
@@ -104,7 +109,7 @@ class LibreOfficeDecryptor(BaseODFDecryptor):
         # Remove PKCS7 padding
         padding_length = plaintext[-1]
         if padding_length > 16 or padding_length == 0:
-            raise DecryptionError("Invalid PKCS7 padding")
+            raise IncorrectPasswordError("Incorrect password")
         return plaintext[:-padding_length]
 
     def _derive_encryption_key(self, start_key: bytes, params: Dict[str, Any]) -> bytes:

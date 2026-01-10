@@ -9,8 +9,8 @@ from cryptography.hazmat.primitives import hashes
 
 from odfdecrypt.decryption.base_odf_decryptor import BaseODFDecryptor
 from odfdecrypt.exceptions import (
-    ChecksumError,
     DecryptionError,
+    IncorrectPasswordError,
     InvalidODFFileError,
     ManifestParseError,
     UnsupportedEncryptionError,
@@ -138,8 +138,8 @@ class AOODecryptor(BaseODFDecryptor):
         # Verify checksum if available
         if entry["checksum_type"] == "SHA1/1K" and entry["checksum"]:
             if not self.verify_sha1_checksum(decrypted_data, entry["checksum"]):
-                raise ChecksumError(
-                    f"Checksum verification failed for {entry['file_path']}"
+                raise IncorrectPasswordError(
+                    f"Incorrect password (checksum verification failed for {entry['file_path']})"
                 )
             logger.debug(f"Checksum verified for {entry['file_path']}")
 

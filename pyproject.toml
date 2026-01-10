@@ -49,7 +49,7 @@ dependencies = [
 ]
 
 [project.scripts]
-odfdecrypt = "odfdecrypt.cli:main"
+odfdecrypt = "odfdecrypt.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/toobee/odf-decrypt"

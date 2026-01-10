@@ -15,6 +15,7 @@ from odfdecrypt.exceptions import (
     ChecksumError,
     DecompressionError,
     DecryptionError,
+    IncorrectPasswordError,
     InvalidODFFileError,
     ManifestParseError,
     ODFDecryptError,
@@ -39,6 +40,7 @@ __all__ = [
     "ManifestParseError",
     "UnsupportedEncryptionError",
     "DecryptionError",
+    "IncorrectPasswordError",
     "ChecksumError",
     "DecompressionError",
     # Version
