@@ -8,6 +8,7 @@ and Apache OpenOffice, handling modern (AES-256-GCM, Argon2id) and legacy
 
 from importlib.metadata import version
 
+from odfdecrypt.api import decrypt, detect_origin
 from odfdecrypt.cli import is_encrypted
 from odfdecrypt.decryption.apache_odf_decryptor import AOODecryptor
 from odfdecrypt.decryption.libre_office_odf_decryptor import LibreOfficeDecryptor
@@ -32,8 +33,10 @@ __all__ = [
     # Detector
     "ODFOriginDetector",
     "OpenOfficeOrigin",
+    "detect_origin",
     # Utilities
     "is_encrypted",
+    "decrypt",
     # Exceptions
     "ODFDecryptError",
     "InvalidODFFileError",
