@@ -93,12 +93,12 @@ jobs:
       - name: Run pycln (remove unused imports)
         run: |
           uv pip install pycln
-          uv run pycln --all --check odf_decrypt
+          uv run pycln --all --check odfdecrypt
 
       - name: Run isort (import sorting)
         run: |
           uv pip install isort
-          uv run isort --profile black --check-only odf_decrypt
+          uv run isort --profile black --check-only odfdecrypt
 
       - name: Run black (code formatting)
         run: |
@@ -106,4 +106,4 @@ jobs:
 
       - name: Run flake8 (linting)
         run: |
-          uv run flake8 odf_decrypt --extend-ignore=E203,E501
+          uv run flake8 odfdecrypt --extend-ignore=E203,E501

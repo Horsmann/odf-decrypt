@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/odf-decrypt
+      url: https://test.pypi.org/p/odfdecrypt
     permissions:
       id-token: write
 
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/odf-decrypt
+      url: https://pypi.org/p/odfdecrypt
     permissions:
       id-token: write
 
