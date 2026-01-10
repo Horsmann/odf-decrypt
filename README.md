@@ -8,13 +8,12 @@ A Python library for decrypting password-protected OpenDocument Format (ODF) fil
 
 ## Features
 
-- **Command-Line Tool**: Simple CLI for quick decryption tasks
 - **Dual Application Support**: Decrypt files from both LibreOffice and Apache OpenOffice
 - **Modern Encryption**: AES-256-GCM with Argon2id key derivation (LibreOffice)
 - **Legacy Encryption**: Blowfish-CFB with PBKDF2-SHA1 (Apache OpenOffice)
 - **Automatic Detection**: Identifies the source application and encryption format
 - **All ODF Types**: Supports `.odt`, `.ods`, `.odp`, `.odg`, `.odf`, and more
-- **Password Encryption Only**: Currently supports regular password-protected files (GPG key encryption not yet supported)
+- **Command-Line Tool**: Simple CLI for quick decryption tasks
 
 ## Supported Encryption Formats
 
@@ -27,69 +26,14 @@ A Python library for decrypting password-protected OpenDocument Format (ODF) fil
 ## Installation
 
 ```bash
-pip install odf-decrypt
+pip install odfdecrypt
 ```
 
 Or with [uv](https://github.com/astral-sh/uv):
 
 ```bash
-uv add odf-decrypt
+uv add odfdecrypt
 ```
-
-## Command-Line Usage
-
-### Basic Usage
-
-Decrypt a file with a password:
-
-```bash
-odf-decrypt --file document.odt --password mypassword
-```
-
-This creates `document_decrypted.odt` in the same directory.
-
-### Advanced Options
-
-Specify a custom output path:
-
-```bash
-odf-decrypt --file document.odt --password mypassword --output decrypted.odt
-```
-
-Short options are also available:
-
-```bash
-odf-decrypt -f document.odt -p mypassword -o decrypted.odt
-```
-
-### Check if File is Encrypted
-
-You can programmatically check if a file is encrypted:
-
-```python
-from odfdecrypt import is_encrypted
-
-if is_encrypted("document.odt"):
-    print("File is password protected")
-else:
-    print("File is not encrypted")
-```
-
-### Command Line Features
-
-- **Auto-detection**: Automatically detects LibreOffice vs Apache OpenOffice files
-- **Fallback support**: Tries LibreOffice first, then Apache OpenOffice if needed
-- **Non-encrypted files**: Automatically copies files that aren't encrypted
-- **Directory creation**: Creates output directories if they don't exist
-- **Error handling**: Provides clear error messages for wrong passwords or corrupted files
-
-### Exit Codes
-
-The CLI returns meaningful exit codes:
-- `0`: Success (decryption or copy completed)
-- `1`: Error (file not found, wrong password, decryption failed, etc.)
-
-**Note:** If the file is not encrypted, it will simply be copied to the output path with a notification.
 
 ## Quick Start
 
@@ -161,7 +105,7 @@ decrypted_file = aoo_decryptor.decrypt("document.odt", "password")
 The high-level API automatically handles fallback scenarios:
 
 ```python
-from odfdecrypt import decrypt
+from odfdecrypt import decrypt, IncorrectPasswordError
 
 # This will try LibreOffice first, then Apache OpenOffice if needed
 decrypted_file = decrypt("document.odt", "password")
@@ -172,6 +116,18 @@ try:
 except IncorrectPasswordError:
     print("Wrong password!")
 ```
+
+### Check if File is Encrypted
+
+Before decryption, you can check if a file is encrypted:
+
+```python
+from odfdecrypt import is_encrypted
+
+if is_encrypted("document.odt"):
+    print("File is password protected")
+else:
+    print("File is not encrypted")
 ```
 
 ## API Reference
@@ -426,28 +382,25 @@ def decrypt_folder(folder_path, password, output_folder="decrypted"):
 decrypt_folder("documents/", "mypassword")
 ```
 
-### Example 3: Integration with Document Processing
+### Example 3: Working with In-Memory Buffers
 
 ```python
-import io
-import sharepoint2text
+import zipfile
 from odfdecrypt import decrypt
 
-def extract_text_from_encrypted_odf(file_path, password):
-    """Extract text from an encrypted ODF file."""
-    try:
-        # Decrypt the file
-        decrypted_buffer = decrypt(file_path, password)
+def extract_content_xml(file_path, password):
+    """Extract and return the raw content.xml from an encrypted ODF file."""
+    # Decrypt the file (returns a BytesIO buffer)
+    decrypted_buffer = decrypt(file_path, password)
 
-        # Process with sharepoint2text
-        document = next(sharepoint2text.read_odt(decrypted_buffer))
-        return document.get_full_text()
-    except Exception as e:
-        return f"Error processing file: {e}"
+    # ODF files are ZIP archives - extract content.xml
+    with zipfile.ZipFile(decrypted_buffer, "r") as zf:
+        content_xml = zf.read("content.xml").decode("utf-8")
+        return content_xml
 
 # Usage
-text = extract_text_from_encrypted_odf("document.odt", "password")
-print(f"Document content: {text}")
+content = extract_content_xml("document.odt", "password")
+print(f"Content XML length: {len(content)} characters")
 ```
 
 ### Example 4: Advanced Origin Detection
@@ -483,6 +436,43 @@ try:
 except Exception as e:
     print(f"Could not process document: {e}")
 ```
+
+## Command-Line Interface
+
+A CLI tool is included for quick decryption tasks.
+
+### Basic Usage
+
+```bash
+odfdecrypt --file document.odt --password mypassword
+```
+
+This creates `document_decrypted.odt` in the same directory.
+
+### Options
+
+```bash
+odfdecrypt --file document.odt --password mypassword --output decrypted.odt
+```
+
+Short options are also available:
+
+```bash
+odfdecrypt -f document.odt -p mypassword -o decrypted.odt
+```
+
+### CLI Features
+
+- **Auto-detection**: Automatically detects LibreOffice vs Apache OpenOffice files
+- **Fallback support**: Tries LibreOffice first, then Apache OpenOffice if needed
+- **Non-encrypted files**: Automatically copies files that aren't encrypted
+- **Directory creation**: Creates output directories if they don't exist
+- **Error handling**: Provides clear error messages for wrong passwords or corrupted files
+
+### Exit Codes
+
+- `0`: Success (decryption or copy completed)
+- `1`: Error (file not found, wrong password, decryption failed, etc.)
 
 ## License
 
