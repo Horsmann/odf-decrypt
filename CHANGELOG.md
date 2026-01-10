@@ -43,5 +43,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for all ODF file types: `.odt`, `.ods`, `.odp`, `.odg`, `.odf`, `.odb`, `.odc`, `.odm`, and templates
 - GitHub Actions workflows for automated testing and publishing
 - Multi-version Python testing (3.10, 3.11, 3.12, 3.13, 3.14)
-
-[Unreleased]: https://github.com/toobee/odf-decrypt/commits/main
