@@ -47,63 +47,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: |
-          uv sync --all-groups
+        run: uv sync --all-groups
 
-      - name: Run trailing-whitespace
-        run: |
-          # Check for trailing whitespace
-          if git grep -n '[[:space:]]$' -- '*.py' '*.yml' '*.yaml' '*.md' '*.txt' '*.json' '*.toml'; then
-            echo "Error: Found trailing whitespace in files"
-            exit 1
-          fi
-          echo "No trailing whitespace found"
-
-      - name: Run end-of-file-fixer
-        run: |
-          # Check for missing newline at end of files
-          for file in $(git ls-files -- '*.py' '*.yml' '*.yaml' '*.md' '*.txt' '*.json' '*.toml'); do
-            if [ -s "$file" ] && [ "$(tail -c 1 "$file" | wc -l)" -eq 0 ]; then
-              echo "Error: Missing newline at end of $file"
-              exit 1
-            fi
-          done
-          echo "All files end with proper newlines"
-
-      - name: Run check-yaml
-        run: |
-          # Check YAML syntax
-          for file in $(git ls-files -- '*.yml' '*.yaml'); do
-            uv run python -c "import yaml; yaml.safe_load(open('$file'))" || {
-              echo "Error: Invalid YAML syntax in $file"
-              exit 1
-            }
-          done
-          echo "All YAML files are valid"
-
-      - name: Run check-merge-conflict
-        run: |
-          # Check for merge conflict markers
-          if git grep -n '^<<<<<<< ' -- '*.py' '*.yml' '*.yaml' '*.md' '*.txt' '*.json' '*.toml'; then
-            echo "Error: Found merge conflict markers"
-            exit 1
-          fi
-          echo "No merge conflict markers found"
-
-      - name: Run pycln (remove unused imports)
-        run: |
-          uv pip install pycln
-          uv run pycln --all --check odfdecrypt
-
-      - name: Run isort (import sorting)
-        run: |
-          uv pip install isort
-          uv run isort --profile black --check-only odfdecrypt
-
-      - name: Run black (code formatting)
-        run: |
-          uv run black --check .
-
-      - name: Run flake8 (linting)
-        run: |
-          uv run flake8 odfdecrypt --extend-ignore=E203,E501
+      - name: Run pre-commit hooks
+        run: uv run pre-commit run --all-files
